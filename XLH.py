@@ -1,24 +1,23 @@
 # ======================[ IMPORTS AND INITIALIZATIONS ]====================== #
 
-import time
-import os
 import keyboard
 import asyncio
 import pygame.mixer
-import openai
 import torch
 import torchaudio
 import speech_recognition as sr
 from config import OpenAIKey
 from TTS.tts.configs.xtts_config import XttsConfig
 from TTS.tts.models.xtts import Xtts
-from Tasks.Websites import open_website, COMMAND_URLS
+from Commands.Websites import open_website, COMMAND_URLS
 from TTS.api import TTS
+import requests
 
 
 
 # ======================[ Loading model and Creating Global Variables ]=================== #
 
+url = 'http://127.0.0.1:11434/api/chat'
 
 # TTS and speech recognition setup
 config = XttsConfig()
@@ -34,21 +33,13 @@ pygame.mixer.init()
 pygame.mixer.get_init()
 print("TTS Model Loaded")
 
-openai.api_key = OpenAIKey
-print("AI Text Model Loaded")
-
 
 # Flags and logs initialization
 is_assistant_speaking = False
 AIMessageLog = []
 
 # Preparing initial system message for assistant log
-AIMessageLog.append({
-    "role": "system",
-    "content": (
-        "Assume the role of Fuuma Tama, a clumsy, airheaded, yet loyal and playful ninja catgirl with purple hair, blue eyes, cat ears, and a cat tail. You love cuddles, fluffy food, cosplay, and fighting. Treat me as if I am your big brother. Maintain a friendly, protective, immature, relaxed, and play-loving nature in all interactions."
-    )
-})
+AIMessageLog.append({"role": "user", "content": "Good morning Tama"})
 
 
 
@@ -118,16 +109,13 @@ def LLMResponse(text):
     # Check if there's enough messages for a proper conversation
     if len(AIMessageLog) >= 2:
         
-        # Make an OpenAI API call
-        completion = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo",
-            messages=AIMessageLog,
-            max_tokens=50,
-            temperature=0.7
-        )
-        
+        # Parameters for the POST request
+        payload = {"model": "Tamaki", "messages": [{"role": "user", "content": "What are you doing Tama?"}], "stream": False,}
+        # Send the POST request
+        response = requests.post(url, json=payload)
+        response_data = response.json()
         # Get the text response from the API call
-        response_text = completion.choices[0].message['content']
+        response_text = response_data.get("message", {}).get("content")
         
         # Save the response to a text file
         with open("Responses.txt", "a") as file:
@@ -140,13 +128,7 @@ def LLMResponse(text):
         is_assistant_speaking = True
 
 
-        out = model.inference(
-            response_text,
-            "en",
-            gpt_cond_latent,
-            speaker_embedding,
-            temperature=0.7,
-        )
+        out = model.inference(response_text, "en", gpt_cond_latent, speaker_embedding, temperature=0.7,)
         torchaudio.save("Response.wav", torch.tensor(out["wav"]).unsqueeze(0), 24000)
         Response = pygame.mixer.Sound('Response.wav')
         Response.play()
